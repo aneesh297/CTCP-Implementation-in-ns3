@@ -24,79 +24,110 @@
  * The University of Kansas Lawrence, KS USA.
  */
 
-#include "tcp-vegas.h"
+#include "tcp-Compound.h"
 #include "ns3/tcp-socket-base.h"
 #include "ns3/log.h"
 
+ #include "math.h"
+
 namespace ns3 {
 
-NS_LOG_COMPONENT_DEFINE ("TcpVegas");
-NS_OBJECT_ENSURE_REGISTERED (TcpVegas);
+NS_LOG_COMPONENT_DEFINE ("TcpCompound");
+NS_OBJECT_ENSURE_REGISTERED (TcpCompound);
 
 TypeId
-TcpVegas::GetTypeId (void)
+TcpCompound::GetTypeId (void)
 {
-  static TypeId tid = TypeId ("ns3::TcpVegas")
+  static TypeId tid = TypeId ("ns3::TcpCompound")
     .SetParent<TcpNewReno> ()
-    .AddConstructor<TcpVegas> ()
+    .AddConstructor<TcpCompound> ()
     .SetGroupName ("Internet")
-    .AddAttribute ("Alpha", "Lower bound of packets in network",
+
+    //gg
+    .AddAttribute ("Alpha", "Alpha for multiplicative increase for m_cWnd",
+                   DoubleValue (0.125),
+                   MakeDoubleAccessor (&TcpCompound::m_beta),
+                   MakeDoubleChecker <double> (0.0))
+    .AddAttribute ("Beta", "Beta for multiplicative decrease for m_cWnd",
+                   DoubleValue (0.5),
+                   MakeDoubleAccessor (&TcpCompound::m_beta),
+                   MakeDoubleChecker <double> (0.0))
+    .AddAttribute ("eta", "Eta for additive decrease for m_dwnd",
+                   DoubleValue (1.0),
+                   MakeDoubleAccessor (&TcpCompound::m_beta),
+                   MakeDoubleChecker <double> (0.0))
+    .AddAttribute ("k", "Exponent for multiplicative increase for m_cWnd",
+                   DoubleValue (1.0),
+                   MakeDoubleAccessor (&TcpCompound::m_beta),
+                   MakeDoubleChecker <double> (0.0))
+    .AddAttribute ("Gamma", "Upper bound of packets in network",
+                   UintegerValue (30),
+                   MakeUintegerAccessor (&TcpCompound::m_gamma),
+                   MakeUintegerChecker<uint32_t> ())
+    .AddAttribute ("Cwnd", "Loss-based congestion window",
                    UintegerValue (2),
-                   MakeUintegerAccessor (&TcpVegas::m_alpha),
+                   MakeUintegerAccessor (&TcpCompound::m_cwnd),
                    MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("Beta", "Upper bound of packets in network",
-                   UintegerValue (4),
-                   MakeUintegerAccessor (&TcpVegas::m_beta),
+    .AddAttribute ("Dwnd", "Delay-based congestion window",
+                   UintegerValue (0),
+                   MakeUintegerAccessor (&TcpCompound::m_dwnd),
                    MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("Gamma", "Limit on increase",
-                   UintegerValue (1),
-                   MakeUintegerAccessor (&TcpVegas::m_gamma),
-                   MakeUintegerChecker<uint32_t> ())
+    //gg
   ;
   return tid;
 }
 
-TcpVegas::TcpVegas (void)
+TcpCompound::TcpCompound (void)
   : TcpNewReno (),
-    m_alpha (2),
-    m_beta (4),
+
+    m_alpha (0.125),
+    m_beta (0.5),
+    m_eta (1.0),
+    m_k (0.75),
+
     m_gamma (1),
     m_baseRtt (Time::Max ()),
     m_minRtt (Time::Max ()),
     m_cntRtt (0),
-    m_doingVegasNow (true),
+    m_doingCompoundNow (true),
     m_begSndNxt (0)
 {
   NS_LOG_FUNCTION (this);
 }
 
-TcpVegas::TcpVegas (const TcpVegas& sock)
+TcpCompound::TcpCompound (const TcpCompound& sock)
   : TcpNewReno (sock),
+
+    m_alpha (sock.m_alpha),
+    m_beta (sock.m_beta),
+    m_eta (sock.m_eta),
+    m_k (sock.m_k).
+
     m_alpha (sock.m_alpha),
     m_beta (sock.m_beta),
     m_gamma (sock.m_gamma),
     m_baseRtt (sock.m_baseRtt),
     m_minRtt (sock.m_minRtt),
     m_cntRtt (sock.m_cntRtt),
-    m_doingVegasNow (true),
+    m_doingCompoundNow (true),
     m_begSndNxt (0)
 {
   NS_LOG_FUNCTION (this);
 }
 
-TcpVegas::~TcpVegas (void)
+TcpCompound::~TcpCompound (void)
 {
   NS_LOG_FUNCTION (this);
 }
 
 Ptr<TcpCongestionOps>
-TcpVegas::Fork (void)
+TcpCompound::Fork (void)
 {
-  return CopyObject<TcpVegas> (this);
+  return CopyObject<TcpCompound> (this);
 }
 
 void
-TcpVegas::PktsAcked (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked,
+TcpCompound::PktsAcked (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked,
                      const Time& rtt)
 {
   NS_LOG_FUNCTION (this << tcb << segmentsAcked << rtt);
@@ -118,74 +149,74 @@ TcpVegas::PktsAcked (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked,
 }
 
 void
-TcpVegas::EnableVegas (Ptr<TcpSocketState> tcb)
+TcpCompound::EnableCompound (Ptr<TcpSocketState> tcb)
 {
   NS_LOG_FUNCTION (this << tcb);
 
-  m_doingVegasNow = true;
+  m_doingCompoundNow = true;
   m_begSndNxt = tcb->m_nextTxSequence;
   m_cntRtt = 0;
   m_minRtt = Time::Max ();
 }
 
 void
-TcpVegas::DisableVegas ()
+TcpCompound::DisableCompound ()
 {
   NS_LOG_FUNCTION (this);
 
-  m_doingVegasNow = false;
+  m_doingCompoundNow = false;
 }
 
 void
-TcpVegas::CongestionStateSet (Ptr<TcpSocketState> tcb,
+TcpCompound::CongestionStateSet (Ptr<TcpSocketState> tcb,
                               const TcpSocketState::TcpCongState_t newState)
 {
   NS_LOG_FUNCTION (this << tcb << newState);
   if (newState == TcpSocketState::CA_OPEN)
     {
-      EnableVegas (tcb);
+      EnableCompound (tcb);
     }
   else
     {
-      DisableVegas ();
+      DisableCompound ();
     }
 }
 
 void
-TcpVegas::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
+TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
 {
   NS_LOG_FUNCTION (this << tcb << segmentsAcked);
 
-  if (!m_doingVegasNow)
+  if (!m_doingCompoundNow)
     {
-      // If Vegas is not on, we follow NewReno algorithm
-      NS_LOG_LOGIC ("Vegas is not turned on, we follow NewReno algorithm.");
+      // If Compound is not on, we follow NewReno algorithm
+      NS_LOG_LOGIC ("Compound is not turned on, we follow NewReno algorithm.");
       TcpNewReno::IncreaseWindow (tcb, segmentsAcked);
       return;
     }
 
   if (tcb->m_lastAckedSeq >= m_begSndNxt)
-    { // A Vegas cycle has finished, we do Vegas cwnd adjustment every RTT.
+    { // A Compound cycle has finished, we do Compound cwnd adjustment every RTT.
 
-      NS_LOG_LOGIC ("A Vegas cycle has finished, we adjust cwnd once per RTT.");
+      NS_LOG_LOGIC ("A Compound cycle has finished, we adjust cwnd once per RTT.");
 
-      // Save the current right edge for next Vegas cycle
+      // Save the current right edge for next Compound cycle
       m_begSndNxt = tcb->m_nextTxSequence;
 
       /*
-       * We perform Vegas calculations only if we got enough RTT samples to
+       * We perform Compound calculations only if we got enough RTT samples to
        * insure that at least 1 of those samples wasn't from a delayed ACK.
        */
       if (m_cntRtt <= 2)
         {  // We do not have enough RTT samples, so we should behave like Reno
-          NS_LOG_LOGIC ("We do not have enough RTT samples to do Vegas, so we behave like NewReno.");
+          NS_LOG_LOGIC ("We do not have enough RTT samples to do Compound, so we behave like NewReno.");
           TcpNewReno::IncreaseWindow (tcb, segmentsAcked);
         }
       else
         {
-          NS_LOG_LOGIC ("We have enough RTT samples to perform Vegas calculations");
+          NS_LOG_LOGIC ("We have enough RTT samples to perform Compound calculations");
           /*
-           * We have enough RTT samples to perform Vegas algorithm.
+           * We have enough RTT samples to perform Compound algorithm.
            * Now we need to determine if cwnd should be increased or decreased
            * based on the calculated difference between the expected rate and actual sending
            * rate and the predefined thresholds (alpha, beta, and gamma).
@@ -213,6 +244,41 @@ TcpVegas::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
            */
           diff = segCwnd - targetCwnd;
           NS_LOG_DEBUG ("Calculated diff = " << diff);
+
+
+          //gg
+          if (tcb->m_cWnd < tcb->m_ssThresh)
+            {     // Slow start mode
+              NS_LOG_LOGIC ("We are in slow start and diff < m_gamma, so we "
+                            "follow NewReno slow start");
+              TcpNewReno::SlowStart (tcb, segmentsAcked);
+            }
+
+          else if (diff < m_gamma)
+            {
+              // We are going too fast, so we slow down
+              NS_LOG_LOGIC ("No congestion nor packet loss");
+
+
+
+              tcb->m_cWnd += static_cast<uint32_t> (m_alpha*pow(tcb->m_cWnd, m_k));
+
+              double adder = static_cast<double> (tcb->m_segmentSize * tcb->m_segmentSize) / tcb->m_cWnd.Get ();
+              adder = std::max (1.0, adder);
+              m_cwnd += static_cast<uint32_t> (adder);
+
+              NS_ASSERT (m_cWnd >= m_cwnd);
+              m_dwnd = m_cWnd - m_cwnd;
+             
+  
+            }
+          else if (diff < m_alpha)
+            {
+              // We are going too slow (having too little data in the network),
+              // so we speed up.
+              NS_LOG_LOGIC ("We are going too slow, so we speed up by incrementing cwnd");
+              
+            }
 
           if (diff > m_gamma && (tcb->m_cWnd < tcb->m_ssThresh))
             {
@@ -264,6 +330,9 @@ TcpVegas::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
                   NS_LOG_LOGIC ("We are sending at the right speed");
                 }
             }
+
+          //gg
+
           tcb->m_ssThresh = std::max (tcb->m_ssThresh, 3 * tcb->m_cWnd / 4);
           NS_LOG_DEBUG ("Updated ssThresh = " << tcb->m_ssThresh);
         }
@@ -279,13 +348,13 @@ TcpVegas::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
 }
 
 std::string
-TcpVegas::GetName () const
+TcpCompound::GetName () const
 {
-  return "TcpVegas";
+  return "TcpCompound";
 }
 
 uint32_t
-TcpVegas::GetSsThresh (Ptr<const TcpSocketState> tcb,
+TcpCompound::GetSsThresh (Ptr<const TcpSocketState> tcb,
                        uint32_t bytesInFlight)
 {
   NS_LOG_FUNCTION (this << tcb << bytesInFlight);

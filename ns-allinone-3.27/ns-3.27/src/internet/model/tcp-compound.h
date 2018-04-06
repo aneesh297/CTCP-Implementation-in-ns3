@@ -24,8 +24,8 @@
  * The University of Kansas Lawrence, KS USA.
  */
 
-#ifndef TCPVEGAS_H
-#define TCPVEGAS_H
+#ifndef TCPCompound_H
+#define TCPCompound_H
 
 #include "ns3/tcp-congestion-ops.h"
 
@@ -34,13 +34,13 @@ namespace ns3 {
 /**
  * \ingroup congestionOps
  *
- * \brief An implementation of TCP Vegas
+ * \brief An implementation of TCP Compound
  *
- * TCP Vegas is a pure delay-based congestion control algorithm implementing a proactive
+ * TCP Compound is a pure delay-based congestion control algorithm implementing a proactive
  * scheme that tries to prevent packet drops by maintaining a small backlog at the
  * bottleneck queue.
  *
- * Vegas continuously measures the actual throughput a connection achieves as shown in
+ * Compound continuously measures the actual throughput a connection achieves as shown in
  * Equation (1) and compares it with the expected throughput calculated in Equation (2).
  * The difference between these 2 sending rates in Equation (3) reflects the amount of
  * extra packets being queued at the bottleneck.
@@ -49,18 +49,18 @@ namespace ns3 {
  *              expected = cwnd / BaseRTT  (2)
  *              diff = expected - actual   (3)
  *
- * To avoid congestion, Vegas linearly increases/decreases its congestion window to ensure
+ * To avoid congestion, Compound linearly increases/decreases its congestion window to ensure
  * the diff value fall between the 2 predefined thresholds, alpha and beta.
- * diff and another threshold, gamma, are used to determine when Vegas should change from
+ * diff and another threshold, gamma, are used to determine when Compound should change from
  * its slow-start mode to linear increase/decrease mode.
  *
- * Following the implementation of Vegas in Linux, we use 2, 4, and 1 as the default values
+ * Following the implementation of Compound in Linux, we use 2, 4, and 1 as the default values
  * of alpha, beta, and gamma, respectively.
  *
  * More information: http://dx.doi.org/10.1109/49.464716
  */
 
-class TcpVegas : public TcpNewReno
+class TcpCompound : public TcpNewReno
 {
 public:
   /**
@@ -72,19 +72,19 @@ public:
   /**
    * Create an unbound tcp socket.
    */
-  TcpVegas (void);
+  TcpCompound (void);
 
   /**
    * \brief Copy constructor
    * \param sock the object to copy
    */
-  TcpVegas (const TcpVegas& sock);
-  virtual ~TcpVegas (void);
+  TcpCompound (const TcpCompound& sock);
+  virtual ~TcpCompound (void);
 
   virtual std::string GetName () const;
 
   /**
-   * \brief Compute RTTs needed to execute Vegas algorithm
+   * \brief Compute RTTs needed to execute Compound algorithm
    *
    * The function filters RTT samples from the last RTT to find
    * the current smallest propagation delay + queueing delay (minRtt).
@@ -102,9 +102,9 @@ public:
                           const Time& rtt);
 
   /**
-   * \brief Enable/disable Vegas algorithm depending on the congestion state
+   * \brief Enable/disable Compound algorithm depending on the congestion state
    *
-   * We only start a Vegas cycle when we are in normal congestion state (CA_OPEN state).
+   * We only start a Compound cycle when we are in normal congestion state (CA_OPEN state).
    *
    * \param tcb internal congestion state
    * \param newState new congestion state to which the TCP is going to switch
@@ -113,7 +113,7 @@ public:
                                    const TcpSocketState::TcpCongState_t newState);
 
   /**
-   * \brief Adjust cwnd following Vegas linear increase/decrease algorithm
+   * \brief Adjust cwnd following Compound linear increase/decrease algorithm
    *
    * \param tcb internal congestion state
    * \param segmentsAcked count of segments ACKed
@@ -121,7 +121,7 @@ public:
   virtual void IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked);
 
   /**
-   * \brief Get slow start threshold following Vegas principle
+   * \brief Get slow start threshold following Compound principle
    *
    * \param tcb internal congestion state
    * \param bytesInFlight bytes in flight
@@ -136,9 +136,9 @@ public:
 protected:
 private:
   /**
-   * \brief Enable Vegas algorithm to start taking Vegas samples
+   * \brief Enable Compound algorithm to start taking Compound samples
    *
-   * Vegas algorithm is enabled in the following situations:
+   * Compound algorithm is enabled in the following situations:
    * 1. at the establishment of a connection
    * 2. after an RTO
    * 3. after fast recovery
@@ -146,24 +146,33 @@ private:
    *
    * \param tcb internal congestion state
    */
-  void EnableVegas (Ptr<TcpSocketState> tcb);
+  void EnableCompound (Ptr<TcpSocketState> tcb);
 
   /**
-   * \brief Stop taking Vegas samples
+   * \brief Stop taking Compound samples
    */
-  void DisableVegas ();
+  void DisableCompound ();
 
 private:
-  uint32_t m_alpha;                  //!< Alpha threshold, lower bound of packets in network
-  uint32_t m_beta;                   //!< Beta threshold, upper bound of packets in network
-  uint32_t m_gamma;                  //!< Gamma threshold, limit on increase
-  Time m_baseRtt;                    //!< Minimum of all Vegas RTT measurements seen during connection
+
+  uint32_t m_gamma;                  //!< Gamma threshold, upper bound of packets in network
+  Time m_baseRtt;                    //!< Minimum of all Compound RTT measurements seen during connection
   Time m_minRtt;                     //!< Minimum of all RTT measurements within last RTT
   uint32_t m_cntRtt;                 //!< Number of RTT measurements during last RTT
-  bool m_doingVegasNow;              //!< If true, do Vegas for this RTT
+
+  //gg
+  double m_alpha;
+  double m_beta;
+  double m_eta;
+  double m_k;
+  uint32_t m_cwnd;                  //!< Locally maintained loss-based congestion window                  
+  uint32_t m_dwnd;                  //!< Locally maintained delay-based congestion window
+  //gg 
+
+  bool m_doingCompoundNow;              //!< If true, do Compound for this RTT
   SequenceNumber32 m_begSndNxt;      //!< Right edge during last RTT
 };
 
 } // namespace ns3
 
-#endif // TCPVEGAS_H
+#endif // TCPCompound_H
