@@ -246,9 +246,9 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
           NS_LOG_DEBUG ("Calculated diff = " << diff);
 
 
-          //gg
-          if (tcb->m_cWnd < tcb->m_ssThresh)
-            {     // Slow start mode
+          if ((tcb->m_cWnd < tcb->m_ssThresh) && (diff < m_gamma)
+            {     
+              // Slow start mode
               NS_LOG_LOGIC ("We are in slow start and diff < m_gamma, so we "
                             "follow NewReno slow start");
               TcpNewReno::SlowStart (tcb, segmentsAcked);
@@ -256,7 +256,6 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
 
           else if (diff < m_gamma)
             {
-              // We are going too fast, so we slow down
               NS_LOG_LOGIC ("No congestion nor packet loss");
 
 
@@ -272,24 +271,21 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
              
   
             }
-          else if (diff < m_gamma)
+          else if (diff >= m_gamma)
             {
-              // We are going too fast, so we slow down
-              NS_LOG_LOGIC ("Only Congestion nor packet loss");
-
+              NS_LOG_LOGIC ("Only Congestion, no packet loss");
 
               double adder = static_cast<double> (tcb->m_segmentSize * tcb->m_segmentSize) / tcb->m_cWnd.Get ();
               adder = std::max (1.0, adder);
               m_cwnd += static_cast<uint32_t> (adder);
 
-              m_dwnd = static_cast<uint32_t>(std::max(1.0,static_cast(double)(m_dwnd) - m_eta * diff));
+              m_dwnd = static_cast<uint32_t>(std::max(1.0,static_cast<double>(m_dwnd) - m_eta * diff));
+
               tcb->m_cWnd = m_cwnd + m_dwnd;
             }
-
          
-            }
+          }
 
-          //gg
         }
 
       // Reset cntRtt & minRtt every RTT
