@@ -267,74 +267,29 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
               adder = std::max (1.0, adder);
               m_cwnd += static_cast<uint32_t> (adder);
 
-              NS_ASSERT (m_cWnd >= m_cwnd);
-              m_dwnd = m_cWnd - m_cwnd;
+              NS_ASSERT (tcb->m_cWnd >= m_cwnd);
+              m_dwnd = tcb->m_cWnd - m_cwnd;
              
   
             }
-          else if (diff < m_alpha)
+          else if (diff < m_gamma)
             {
-              // We are going too slow (having too little data in the network),
-              // so we speed up.
-              NS_LOG_LOGIC ("We are going too slow, so we speed up by incrementing cwnd");
-              
+              // We are going too fast, so we slow down
+              NS_LOG_LOGIC ("Only Congestion nor packet loss");
+
+
+              double adder = static_cast<double> (tcb->m_segmentSize * tcb->m_segmentSize) / tcb->m_cWnd.Get ();
+              adder = std::max (1.0, adder);
+              m_cwnd += static_cast<uint32_t> (adder);
+
+              m_dwnd = static_cast<uint32_t>(std::max(1.0,static_cast(double)(m_dwnd) - m_eta * diff));
+              tcb->m_cWnd = m_cwnd + m_dwnd;
             }
 
-          if (diff > m_gamma && (tcb->m_cWnd < tcb->m_ssThresh))
-            {
-              /*
-               * We are going too fast. We need to slow down and change from
-               * slow-start to linear increase/decrease mode by setting cwnd
-               * to target cwnd. We add 1 because of the integer truncation.
-               */
-              NS_LOG_LOGIC ("We are going too fast. We need to slow down and "
-                            "change to linear increase/decrease mode.");
-              segCwnd = std::min (segCwnd, targetCwnd + 1);
-              tcb->m_cWnd = segCwnd * tcb->m_segmentSize;
-              tcb->m_ssThresh = GetSsThresh (tcb, 0);
-              NS_LOG_DEBUG ("Updated cwnd = " << tcb->m_cWnd <<
-                            " ssthresh=" << tcb->m_ssThresh);
-            }
-          else if (tcb->m_cWnd < tcb->m_ssThresh)
-            {     // Slow start mode
-              NS_LOG_LOGIC ("We are in slow start and diff < m_gamma, so we "
-                            "follow NewReno slow start");
-              TcpNewReno::SlowStart (tcb, segmentsAcked);
-            }
-          else
-            {     // Linear increase/decrease mode
-              NS_LOG_LOGIC ("We are in linear increase/decrease mode");
-              if (diff > m_beta)
-                {
-                  // We are going too fast, so we slow down
-                  NS_LOG_LOGIC ("We are going too fast, so we slow down by decrementing cwnd");
-                  segCwnd--;
-                  tcb->m_cWnd = segCwnd * tcb->m_segmentSize;
-                  tcb->m_ssThresh = GetSsThresh (tcb, 0);
-                  NS_LOG_DEBUG ("Updated cwnd = " << tcb->m_cWnd <<
-                                " ssthresh=" << tcb->m_ssThresh);
-                }
-              else if (diff < m_alpha)
-                {
-                  // We are going too slow (having too little data in the network),
-                  // so we speed up.
-                  NS_LOG_LOGIC ("We are going too slow, so we speed up by incrementing cwnd");
-                  segCwnd++;
-                  tcb->m_cWnd = segCwnd * tcb->m_segmentSize;
-                  NS_LOG_DEBUG ("Updated cwnd = " << tcb->m_cWnd <<
-                                " ssthresh=" << tcb->m_ssThresh);
-                }
-              else
-                {
-                  // We are going at the right speed
-                  NS_LOG_LOGIC ("We are sending at the right speed");
-                }
+         
             }
 
           //gg
-
-          tcb->m_ssThresh = std::max (tcb->m_ssThresh, 3 * tcb->m_cWnd / 4);
-          NS_LOG_DEBUG ("Updated ssThresh = " << tcb->m_ssThresh);
         }
 
       // Reset cntRtt & minRtt every RTT
