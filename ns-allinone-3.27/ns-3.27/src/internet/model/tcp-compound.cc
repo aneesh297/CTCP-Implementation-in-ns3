@@ -84,6 +84,11 @@ TcpCompound::TcpCompound (void)
     m_beta (0.5),
     m_eta (1.0),
     m_k (0.75),
+    m_expectedReno(0.0),
+    m_actualReno(0.0),
+    m_diffReno(0.0),
+    m_gammaLow(5),
+    m_gammaHigh(30)
 
     m_gamma (1),
     m_baseRtt (Time::Max ()),
@@ -102,6 +107,11 @@ TcpCompound::TcpCompound (const TcpCompound& sock)
     m_beta (sock.m_beta),
     m_eta (sock.m_eta),
     m_k (sock.m_k).
+    m_expectedReno(sock.m_expectedReno),
+    m_actualReno(sock.m_actualReno),
+    m_diffReno(sock.m_diffReno)
+    m_gammaHigh(sock.m_gammaHigh),
+    m_gammaLow(sock.m_gammaLow)
 
     m_alpha (sock.m_alpha),
     m_beta (sock.m_beta),
@@ -284,8 +294,10 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
               tcb->m_cWnd = m_cwnd + m_dwnd;
             }
          
-          }
-
+          
+          m_expectedReno = m_cwnd / baseRtt;
+          m_actualReno = m_cwnd / m_minRtt;
+          m_diffReno = (m_expectedReno - m_actualReno) * baseRtt;
         }
 
       // Reset cntRtt & minRtt every RTT
