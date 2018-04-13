@@ -180,6 +180,20 @@ TcpCompound::CongestionStateSet (Ptr<TcpSocketState> tcb,
     {
       EnableCompound (tcb);
     }
+  else if (newState == TcpSocketState::CA_RECOVERY)
+    {
+        /*if (tcb->m_cWnd >= tcb->m_ssThresh)
+          {
+            m_lwnd += tcb->cWnd - tcb->m_ssThresh;
+          }*/
+        /* TcpSocketBase::EnterRecover() after updated ssthresh 
+        * adds 3 MSS to tcb->cWnd. This needs to be reflected in m_lwnd
+        */
+        if (tcb->m_cWnd > m_lwnd + m_dwnd)
+          {
+            m_lwnd = tcb->cWnd - m_dwnd;
+          }
+    }
   else
     {
       DisableCompound ();
@@ -315,7 +329,15 @@ TcpCompound::GetSsThresh (Ptr<const TcpSocketState> tcb,
                        uint32_t bytesInFlight)
 {
   NS_LOG_FUNCTION (this << tcb << bytesInFlight);
-  return std::max (std::min (tcb->m_ssThresh.Get (), tcb->m_cWnd.Get () - tcb->m_segmentSize), 2 * tcb->m_segmentSize);
+
+
+  uint32_t new_window = (1-m_beta)*(tcb->m_cWnd.Get ());
+
+  m_cwnd = m_cwnd / 2;
+
+  m_dwnd = static_cast<uint32_t>(std::max(new_window - m_cwnd , 0));
+
+  return std::max (new_window), 2 * tcb->m_segmentSize);
 }
 
 } // namespace ns3
