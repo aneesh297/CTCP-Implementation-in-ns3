@@ -162,7 +162,7 @@ private:
   double m_beta;					//!< Parameter used in multiplicative decrease
   double m_eta;						//!< Parameter used in additive increase of m_dwnd
   double m_k;						//!< Exponent used in multiplicative increase
-  double lamda;						//!< Weight parameter controlling m_gamma calculation
+  double lamda;						//!< Weight assigned to new sample in gamma calculation
   uint32_t m_lwnd;                  //!< Locally maintained loss-based congestion window                  
   uint32_t m_dwnd;                  //!< Locally maintained delay-based congestion window
   uint32_t m_diffReno 				//!< diff value calculated for gamma autotuning
