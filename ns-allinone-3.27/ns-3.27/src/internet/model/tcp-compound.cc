@@ -42,19 +42,23 @@ TcpCompound::GetTypeId (void)
     .AddAttribute ("Alpha", "Alpha for multiplicative increase of m_cWnd",
                    DoubleValue (0.125),
                    MakeDoubleAccessor (&TcpCompound::m_alpha),
-                   MakeDoubleChecker <double> (0.0))
+                   MakeDoubleChecker <double> (0.0, 1.0))
     .AddAttribute ("Beta", "Beta for multiplicative decrease of m_cWnd",
                    DoubleValue (0.5),
                    MakeDoubleAccessor (&TcpCompound::m_beta),
-                   MakeDoubleChecker <double> (0.0))
+                   MakeDoubleChecker <double> (0.0, 1.0))
     .AddAttribute ("eta", "Eta for additive decrease of m_dwnd",
                    DoubleValue (1.0),
                    MakeDoubleAccessor (&TcpCompound::m_eta),
-                   MakeDoubleChecker <double> (0.0))
+                   MakeDoubleChecker <double> (0.0, 1.0))
     .AddAttribute ("k", "Exponent for multiplicative increase of m_cWnd",
-                   DoubleValue (1.0),
+                   DoubleValue (0.75),
                    MakeDoubleAccessor (&TcpCompound::m_k),
-                   MakeDoubleChecker <double> (0.0))
+                   MakeDoubleChecker <double> (0.0, 1.0))
+    .AddAttribute ("lamda", "Weight used to calculate gamma",
+                   DoubleValue (0.8),
+                   MakeDoubleAccessor (&TcpCompound::m_lamda),
+                   MakeDoubleChecker <double> (0.0, 1.0))
     .AddAttribute ("Gamma", "Upper bound of packets in network",
                    UintegerValue (30),
                    MakeUintegerAccessor (&TcpCompound::m_gamma),
@@ -78,16 +82,18 @@ TcpCompound::TcpCompound (void)
     m_beta (0.5),
     m_eta (1.0),
     m_k (0.75),
+    m_lamda (0.8),
     m_expectedReno(0.0),
     m_actualReno(0.0),
     m_diffReno(0.0),
     m_gammaLow(5),
-    m_gammaHigh(30)
-
-    m_gamma (1),
+    m_gammaHigh(30),
+    m_gamma (30),
     m_baseRtt (Time::Max ()),
     m_minRtt (Time::Max ()),
     m_cntRtt (0),
+    m_diffReno(0),
+    m_diffRenoValid(false),
     m_doingCompoundNow (true),
     m_begSndNxt (0)
 {
@@ -100,19 +106,21 @@ TcpCompound::TcpCompound (const TcpCompound& sock)
     m_alpha (sock.m_alpha),
     m_beta (sock.m_beta),
     m_eta (sock.m_eta),
-    m_k (sock.m_k).
-    m_expectedReno(sock.m_expectedReno),
-    m_actualReno(sock.m_actualReno),
-    m_diffReno(sock.m_diffReno)
-    m_gammaHigh(sock.m_gammaHigh),
-    m_gammaLow(sock.m_gammaLow)
-
+    m_k (sock.m_k),
+    m_lamda (sock.m_lamda),
+    m_expectedReno (sock.m_expectedReno),
+    m_actualReno (sock.m_actualReno),
+    m_diffReno (sock.m_diffReno),
+    m_gammaHigh (sock.m_gammaHigh),
+    m_gammaLow (sock.m_gammaLow),
     m_alpha (sock.m_alpha),
     m_beta (sock.m_beta),
     m_gamma (sock.m_gamma),
     m_baseRtt (sock.m_baseRtt),
     m_minRtt (sock.m_minRtt),
     m_cntRtt (sock.m_cntRtt),
+    m_diffReno (sock.m_diffReno),
+    m_diffRenoValid (false),
     m_doingCompoundNow (true),
     m_begSndNxt (0)
 {
@@ -180,22 +188,45 @@ TcpCompound::CongestionStateSet (Ptr<TcpSocketState> tcb,
     {
       EnableCompound (tcb);
     }
-  else if (newState == TcpSocketState::CA_RECOVERY)
-    {
-        /*if (tcb->m_cWnd >= tcb->m_ssThresh)
-          {
-            m_lwnd += tcb->cWnd - tcb->m_ssThresh;
-          }*/
-        /* TcpSocketBase::EnterRecover() after updated ssthresh 
-        * adds 3 MSS to tcb->cWnd. This needs to be reflected in m_lwnd
-        */
-        if (tcb->m_cWnd > m_lwnd + m_dwnd)
-          {
-            m_lwnd = tcb->cWnd - m_dwnd;
-          }
-    }
+
   else
     {
+    	if (newState == TcpSocketState::CA_LOSS)
+	    {
+	    	if (m_diffRenoValid){
+	    		uint32_t gSample = 3 * m_diffReno / 4;
+	    		m_gamma = m_gamma*(1 - m_lamda) + m_lamda * gSample;
+	    		
+	    		if( m_gamma < m_gammaLow )
+	    		{
+	    			m_gamma = m_gammaLow; 
+	    		}
+
+	    		else if( m_gamma > m_gammaHigh )
+	    		{
+	    			m_gamma = m_gammaHigh;
+	    		}
+	    		// Prevent calculations on consecutive loss 
+	    		m_diffRenoValid = false; 
+	    	}
+	      
+	    }
+
+      else if (newState == TcpSocketState::CA_RECOVERY)
+      {
+          /*if (tcb->m_cWnd >= tcb->m_ssThresh)
+            {
+              m_lwnd += tcb->cWnd - tcb->m_ssThresh;
+            }*/
+          /* TcpSocketBase::EnterRecover() after updated ssthresh 
+          * adds 3 MSS to tcb->cWnd. This needs to be reflected in m_lwnd
+          */
+          if (tcb->m_cWnd > m_lwnd + m_dwnd)
+            {
+              m_lwnd = tcb->cWnd - m_dwnd;
+            }
+      }
+
       DisableCompound ();
     }
 }
@@ -240,8 +271,8 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
            * rate and the predefined thresholds (alpha, beta, and gamma).
            */
           uint32_t diff;
-          uint32_t targetCwnd;
-          uint32_t segCwnd = tcb->GetCwndInSegments ();
+          uint32_t expectedCwnd;
+          uint32_t actualCwnd = tcb->GetCwndInSegments ();
 
           /*
            * Calculate the cwnd we should have. baseRtt is the minimum RTT
@@ -252,15 +283,15 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
            * target cwnd is throughput / minRtt
            */
           double tmp = m_baseRtt.GetSeconds () / m_minRtt.GetSeconds ();
-          targetCwnd = segCwnd * tmp;
-          NS_LOG_DEBUG ("Calculated targetCwnd = " << targetCwnd);
-          NS_ASSERT (segCwnd >= targetCwnd); // implies baseRtt <= minRtt
+          expectedCwnd = actualCwnd * tmp;
+          NS_LOG_DEBUG ("Calculated expectedCwnd = " << expectedCwnd);
+          NS_ASSERT (actualCwnd >= expectedCwnd); // implies baseRtt <= minRtt
 
           /*
            * Calculate the difference between the expected cWnd and
            * the actual cWnd
            */
-          diff = segCwnd - targetCwnd;
+          diff = actualCwnd - expectedCwnd;
           NS_LOG_DEBUG ("Calculated diff = " << diff);
 
 
@@ -295,19 +326,40 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
 
               double adder = static_cast<double> (tcb->m_segmentSize * tcb->m_segmentSize) / tcb->m_cWnd.Get ();
               adder = std::max (1.0, adder);
-              m_lwnd += static_cast<uint32_t> (adder);
 
-              m_dwnd = static_cast<uint32_t>(std::max(1.0,static_cast<double>(m_dwnd) - m_eta * diff));
+              m_lwnd += static_cast<uint32_t> (adder);
+              m_dwnd = static_cast<uint32_t> (std::max(1.0,static_cast<double>(m_dwnd) - m_eta * diff));
 
               tcb->m_cWnd = m_lwnd + m_dwnd;
             }
          
-          
-          m_expectedReno = m_lwnd / baseRtt;
-          m_actualReno = m_lwnd / m_minRtt;
-          m_diffReno = (m_expectedReno - m_actualReno) * baseRtt;
-        
       }
+      
+      /* diff_reno calculations for gamma autotuning as per draft
+      * This is the same as the diff calculation made earlier except here we 
+      * only take into account the loss based component
+      */
+      uint32_t expectedRenoCwnd;
+      uint32_t actualRenoCwnd = m_lwnd / tcb->m_segmentSize;
+
+
+      /*
+       * Calculate the cwnd we should have. baseRtt is the minimum RTT
+       * per-connection, minRtt is the minimum RTT in this window
+       *
+       * little trick:
+       * desidered throughput is currentCwnd * baseRtt
+       * target cwnd is throughput / minRtt
+       */
+
+      double tmp = m_baseRtt.GetSeconds () / m_minRtt.GetSeconds ();
+      uint32_t expectedRenoCwnd = actualRenoCwnd * tmp;
+      NS_LOG_DEBUG ("Calculated expectedRenoCwnd = " << expectedRenoCwnd);
+      NS_ASSERT (actualRenoCwnd >= expectedRenoCwnd); // implies baseRtt <= minRtt 
+
+      m_diffReno = m_expectedReno - m_actualReno;
+      m_diffRenoValid = true;
+
       // Reset cntRtt & minRtt every RTT
       m_cntRtt = 0;
       m_minRtt = Time::Max ();
