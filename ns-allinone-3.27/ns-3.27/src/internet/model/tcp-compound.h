@@ -156,16 +156,15 @@ private:
   Time m_minRtt;                     //!< Minimum of all RTT measurements within last RTT
   uint32_t m_cntRtt;                 //!< Number of RTT measurements during last RTT
 
-  //gg
-  double m_alpha;
-  double m_beta;
-  double m_eta;
-  double m_k;
-  uint32_t m_cwnd;                  //!< Locally maintained loss-based congestion window                  
+  double m_alpha;					//!< Parameter used in multiplicative increase
+  double m_beta;					//!< Parameter used in multiplicative decrease
+  double m_eta;						//!< Parameter used in additive increase of m_dwnd
+  double m_k;						//!< Exponent used in multiplicative increase
+  uint32_t m_lwnd;                  //!< Locally maintained loss-based congestion window                  
   uint32_t m_dwnd;                  //!< Locally maintained delay-based congestion window
-  //gg 
 
-  bool m_doingCompoundNow;              //!< If true, do Compound for this RTT
+
+  bool m_doingCompoundNow;           //!< If true, do Compound for this RTT
   SequenceNumber32 m_begSndNxt;      //!< Right edge during last RTT
 };
 

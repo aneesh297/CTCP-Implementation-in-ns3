@@ -20,7 +20,7 @@
  *          Aneesh Aithal<aneesh297@gmail.com>
  */
 
-#include "tcp-Compound.h"
+#include "tcp-compound.h"
 #include "ns3/tcp-socket-base.h"
 #include "ns3/log.h"
 
@@ -39,22 +39,21 @@ TcpCompound::GetTypeId (void)
     .AddConstructor<TcpCompound> ()
     .SetGroupName ("Internet")
 
-    //gg
-    .AddAttribute ("Alpha", "Alpha for multiplicative increase for m_cWnd",
+    .AddAttribute ("Alpha", "Alpha for multiplicative increase of m_cWnd",
                    DoubleValue (0.125),
-                   MakeDoubleAccessor (&TcpCompound::m_beta),
+                   MakeDoubleAccessor (&TcpCompound::m_alpha),
                    MakeDoubleChecker <double> (0.0))
-    .AddAttribute ("Beta", "Beta for multiplicative decrease for m_cWnd",
+    .AddAttribute ("Beta", "Beta for multiplicative decrease of m_cWnd",
                    DoubleValue (0.5),
                    MakeDoubleAccessor (&TcpCompound::m_beta),
                    MakeDoubleChecker <double> (0.0))
-    .AddAttribute ("eta", "Eta for additive decrease for m_dwnd",
+    .AddAttribute ("eta", "Eta for additive decrease of m_dwnd",
                    DoubleValue (1.0),
-                   MakeDoubleAccessor (&TcpCompound::m_beta),
+                   MakeDoubleAccessor (&TcpCompound::m_eta),
                    MakeDoubleChecker <double> (0.0))
-    .AddAttribute ("k", "Exponent for multiplicative increase for m_cWnd",
+    .AddAttribute ("k", "Exponent for multiplicative increase of m_cWnd",
                    DoubleValue (1.0),
-                   MakeDoubleAccessor (&TcpCompound::m_beta),
+                   MakeDoubleAccessor (&TcpCompound::m_k),
                    MakeDoubleChecker <double> (0.0))
     .AddAttribute ("Gamma", "Upper bound of packets in network",
                    UintegerValue (30),
@@ -62,13 +61,12 @@ TcpCompound::GetTypeId (void)
                    MakeUintegerChecker<uint32_t> ())
     .AddAttribute ("Cwnd", "Loss-based congestion window",
                    UintegerValue (2),
-                   MakeUintegerAccessor (&TcpCompound::m_cwnd),
+                   MakeUintegerAccessor (&TcpCompound::m_lwnd),
                    MakeUintegerChecker<uint32_t> ())
     .AddAttribute ("Dwnd", "Delay-based congestion window",
                    UintegerValue (0),
                    MakeUintegerAccessor (&TcpCompound::m_dwnd),
                    MakeUintegerChecker<uint32_t> ())
-    //gg
   ;
   return tid;
 }
@@ -270,10 +268,10 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
 
               double adder = static_cast<double> (tcb->m_segmentSize * tcb->m_segmentSize) / tcb->m_cWnd.Get ();
               adder = std::max (1.0, adder);
-              m_cwnd += static_cast<uint32_t> (adder);
+              m_lwnd += static_cast<uint32_t> (adder);
 
-              NS_ASSERT (tcb->m_cWnd >= m_cwnd);
-              m_dwnd = tcb->m_cWnd - m_cwnd;
+              NS_ASSERT (tcb->m_cWnd >= m_lwnd);
+              m_dwnd = tcb->m_cWnd - m_lwnd;
              
   
             }
@@ -283,19 +281,19 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
 
               double adder = static_cast<double> (tcb->m_segmentSize * tcb->m_segmentSize) / tcb->m_cWnd.Get ();
               adder = std::max (1.0, adder);
-              m_cwnd += static_cast<uint32_t> (adder);
+              m_lwnd += static_cast<uint32_t> (adder);
 
               m_dwnd = static_cast<uint32_t>(std::max(1.0,static_cast<double>(m_dwnd) - m_eta * diff));
 
-              tcb->m_cWnd = m_cwnd + m_dwnd;
+              tcb->m_cWnd = m_lwnd + m_dwnd;
             }
          
           
-          m_expectedReno = m_cwnd / baseRtt;
-          m_actualReno = m_cwnd / m_minRtt;
+          m_expectedReno = m_lwnd / baseRtt;
+          m_actualReno = m_lwnd / m_minRtt;
           m_diffReno = (m_expectedReno - m_actualReno) * baseRtt;
-        }
-
+        
+      }
       // Reset cntRtt & minRtt every RTT
       m_cntRtt = 0;
       m_minRtt = Time::Max ();
