@@ -152,6 +152,8 @@ private:
 private:
 
   uint32_t m_gamma;                  //!< Gamma threshold, upper bound of packets in network
+  uint32_t m_gammaLow;                  //!< Gamma threshold, upper bound of packets in network
+  uint32_t m_gammaHigh;                  //!< Gamma threshold, upper bound of packets in network
   Time m_baseRtt;                    //!< Minimum of all Compound RTT measurements seen during connection
   Time m_minRtt;                     //!< Minimum of all RTT measurements within last RTT
   uint32_t m_cntRtt;                 //!< Number of RTT measurements during last RTT
@@ -160,11 +162,13 @@ private:
   double m_beta;					//!< Parameter used in multiplicative decrease
   double m_eta;						//!< Parameter used in additive increase of m_dwnd
   double m_k;						//!< Exponent used in multiplicative increase
+  double lamda;						//!< Weight parameter controlling m_gamma calculation
   uint32_t m_lwnd;                  //!< Locally maintained loss-based congestion window                  
   uint32_t m_dwnd;                  //!< Locally maintained delay-based congestion window
-
+  uint32_t m_diffReno 				//!< diff value calculated for gamma autotuning
 
   bool m_doingCompoundNow;           //!< If true, do Compound for this RTT
+  bool m_diffRenoValid				 //!< If true, do gamma autotuning upon loss
   SequenceNumber32 m_begSndNxt;      //!< Right edge during last RTT
 };
 
