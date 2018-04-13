@@ -56,7 +56,7 @@ TcpCompound::GetTypeId (void)
                    MakeDoubleAccessor (&TcpCompound::m_k),
                    MakeDoubleChecker <double> (0.0, 1.0))
     .AddAttribute ("lamda", "Weight used to calculate gamma",
-                   DoubleValue (0.2),
+                   DoubleValue (0.8),
                    MakeDoubleAccessor (&TcpCompound::m_lamda),
                    MakeDoubleChecker <double> (0.0, 1.0))
     .AddAttribute ("Gamma", "Upper bound of packets in network",
@@ -82,7 +82,7 @@ TcpCompound::TcpCompound (void)
     m_beta (0.5),
     m_eta (1.0),
     m_k (0.75),
-    m_lamda (0.2),
+    m_lamda (0.8),
     m_expectedReno(0.0),
     m_actualReno(0.0),
     m_diffReno(0.0),
