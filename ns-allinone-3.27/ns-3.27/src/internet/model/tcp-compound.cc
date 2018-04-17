@@ -225,9 +225,9 @@ TcpCompound::CongestionStateSet (Ptr<TcpSocketState> tcb,
             {
               m_lwnd += tcb->cWnd - tcb->m_ssThresh;
             }*/
-          /* TcpSocketBase::EnterRecover() after updated ssthresh 
-          * adds 3 MSS to tcb->cWnd. This needs to be reflected in m_lwnd
-          */
+          /* TcpSocketBase::EnterRecover() adds 3 MSS to tcb->cWnd after updating ssthresh.
+           * This needs to be reflected in m_lwnd since it is the loss based component
+           */
           if (tcb->m_cWnd > m_lwnd + m_dwnd)
             {
               m_lwnd = tcb->cWnd - m_dwnd;
