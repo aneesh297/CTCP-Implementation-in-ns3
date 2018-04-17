@@ -25,6 +25,7 @@
 #include "ns3/log.h"
 
  #include "math.h"
+ #include "limits.h"
 
 namespace ns3 {
 
@@ -75,9 +76,10 @@ TcpCompound::TcpCompound (void)
     m_eta (1.0),
     m_k (0.75),
     m_lamda (0.8),
-    m_expectedReno(0.0),
-    m_actualReno(0.0),
-    m_diffReno(0.0),
+    m_lwnd (INT_MAX),
+    m_dwnd (0),
+    m_diffReno(0),
+    m_diffRenoValid (false),
     m_gammaLow(5),
     m_gammaHigh(30),
     m_gamma (30),
@@ -85,11 +87,9 @@ TcpCompound::TcpCompound (void)
     m_minRtt (Time::Max ()),
     m_cntRtt (0),
     m_srtt (0),
-    m_diffReno (0),
-    m_dwnd (0),
-    m_diffRenoValid (false),
     m_doingCompoundNow (true),
     m_begSndNxt (0)
+
 {
   NS_LOG_FUNCTION (this);
 }
@@ -102,22 +102,20 @@ TcpCompound::TcpCompound (const TcpCompound& sock)
     m_eta (sock.m_eta),
     m_k (sock.m_k),
     m_lamda (sock.m_lamda),
-    m_expectedReno (sock.m_expectedReno),
-    m_actualReno (sock.m_actualReno),
+    m_lwnd (sock.m_lwnd),
+    m_dwnd (sock.m_dwnd),
     m_diffReno (sock.m_diffReno),
-    m_gammaHigh (sock.m_gammaHigh),
+    m_diffRenoValid (false),
     m_gammaLow (sock.m_gammaLow),
-    m_alpha (sock.m_alpha),
-    m_beta (sock.m_beta),
+    m_gammaHigh (sock.m_gammaHigh),
     m_gamma (sock.m_gamma),
     m_baseRtt (sock.m_baseRtt),
     m_minRtt (sock.m_minRtt),
     m_cntRtt (sock.m_cntRtt),
     m_srtt (sock.m_srtt),
-    m_diffReno (sock.m_diffReno),
-    m_diffRenoValid (false),
     m_doingCompoundNow (true),
     m_begSndNxt (0)
+
 {
   NS_LOG_FUNCTION (this);
 }
@@ -150,7 +148,7 @@ TcpCompound::PktsAcked (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked,
   m_baseRtt = std::min (m_baseRtt, rtt);
   NS_LOG_DEBUG ("Updated m_baseRtt = " << m_baseRtt);
 
-  double alph = 0.125;
+  double alpha = 0.125;
   m_srtt = (1 - alpha) * m_srtt + alpha * rtt;
   NS_LOG_DEBUG ("Updated m_srtt = " << m_srtt);
 
@@ -168,6 +166,12 @@ TcpCompound::EnableCompound (Ptr<TcpSocketState> tcb)
   m_begSndNxt = tcb->m_nextTxSequence;
   m_cntRtt = 0;
   m_minRtt = Time::Max ();
+
+  if ( m_lwnd == INT_MAX ) // First time when we enter CA
+  {
+    m_lwnd = tcb->m_cWnd;
+    m_dwnd = 0;
+  }
 
 }
 
@@ -230,7 +234,7 @@ TcpCompound::CongestionStateSet (Ptr<TcpSocketState> tcb,
            */
           if (tcb->m_cWnd > m_lwnd + m_dwnd)
             {
-              m_lwnd = tcb->cWnd - m_dwnd;
+              m_lwnd = tcb->m_cWnd - m_dwnd;
             }
       }
 
@@ -302,7 +306,7 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
           NS_LOG_DEBUG ("Calculated diff = " << diff);
 
 
-          if ((tcb->m_cWnd < tcb->m_ssThresh) && (diff < m_gamma)
+          if ((tcb->m_cWnd < tcb->m_ssThresh) && (diff < m_gamma))
             {     
               // Slow start mode
               NS_LOG_LOGIC ("We are in slow start and diff < m_gamma, so we "
@@ -363,11 +367,11 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
        */
 
       double tmp = m_baseRtt.GetSeconds () / m_srtt.GetSeconds ();
-      uint32_t expectedRenoCwnd = actualRenoCwnd * tmp;
+      expectedRenoCwnd = actualRenoCwnd * tmp;
       NS_LOG_DEBUG ("Calculated expectedRenoCwnd = " << expectedRenoCwnd);
       NS_ASSERT (actualRenoCwnd >= expectedRenoCwnd); // implies baseRtt <= minRtt 
 
-      m_diffReno = m_expectedReno - m_actualReno;
+      m_diffReno = expectedRenoCwnd - actualRenoCwnd;
       m_diffRenoValid = true;
 
       // Reset cntRtt & minRtt every RTT
@@ -395,11 +399,11 @@ TcpCompound::GetSsThresh (Ptr<const TcpSocketState> tcb,
 
   uint32_t new_window = (1-m_beta)*(tcb->m_cWnd.Get ());
 
-  m_cwnd = m_cwnd / 2;
+  m_lwnd = m_lwnd / 2;
 
-  m_dwnd = static_cast<uint32_t>(std::max(new_window - m_cwnd , 0));
+  m_dwnd = static_cast<uint32_t>(std::max(new_window - m_lwnd , static_cast<uint32_t> (0)));
 
-  return std::max (new_window), 2 * tcb->m_segmentSize);
+  return std::max (new_window, 2 * tcb->m_segmentSize);
 }
 
 } // namespace ns3
