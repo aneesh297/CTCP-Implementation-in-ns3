@@ -63,14 +63,6 @@ TcpCompound::GetTypeId (void)
                    UintegerValue (30),
                    MakeUintegerAccessor (&TcpCompound::m_gamma),
                    MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("Cwnd", "Loss-based congestion window",
-                   UintegerValue (2),
-                   MakeUintegerAccessor (&TcpCompound::m_lwnd),
-                   MakeUintegerChecker<uint32_t> ())
-    .AddAttribute ("Dwnd", "Delay-based congestion window",
-                   UintegerValue (0),
-                   MakeUintegerAccessor (&TcpCompound::m_dwnd),
-                   MakeUintegerChecker<uint32_t> ())
   ;
   return tid;
 }
@@ -92,8 +84,10 @@ TcpCompound::TcpCompound (void)
     m_baseRtt (Time::Max ()),
     m_minRtt (Time::Max ()),
     m_cntRtt (0),
-    m_diffReno(0),
-    m_diffRenoValid(false),
+    m_srtt (0),
+    m_diffReno (0),
+    m_dwnd (0),
+    m_diffRenoValid (false),
     m_doingCompoundNow (true),
     m_begSndNxt (0)
 {
@@ -119,6 +113,7 @@ TcpCompound::TcpCompound (const TcpCompound& sock)
     m_baseRtt (sock.m_baseRtt),
     m_minRtt (sock.m_minRtt),
     m_cntRtt (sock.m_cntRtt),
+    m_srtt (sock.m_srtt),
     m_diffReno (sock.m_diffReno),
     m_diffRenoValid (false),
     m_doingCompoundNow (true),
@@ -155,6 +150,10 @@ TcpCompound::PktsAcked (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked,
   m_baseRtt = std::min (m_baseRtt, rtt);
   NS_LOG_DEBUG ("Updated m_baseRtt = " << m_baseRtt);
 
+  double alph = 0.125;
+  m_srtt = (1 - alpha) * m_srtt + alpha * rtt;
+  NS_LOG_DEBUG ("Updated m_srtt = " << m_srtt);
+
   // Update RTT counter
   m_cntRtt++;
   NS_LOG_DEBUG ("Updated m_cntRtt = " << m_cntRtt);
@@ -169,6 +168,7 @@ TcpCompound::EnableCompound (Ptr<TcpSocketState> tcb)
   m_begSndNxt = tcb->m_nextTxSequence;
   m_cntRtt = 0;
   m_minRtt = Time::Max ();
+
 }
 
 void
@@ -209,6 +209,13 @@ TcpCompound::CongestionStateSet (Ptr<TcpSocketState> tcb,
 	    		// Prevent calculations on consecutive loss 
 	    		m_diffRenoValid = false; 
 	    	}
+
+          m_dwnd = 0;
+          m_lwnd = tcb->m_cWnd;
+          m_baseRtt = m_srtt; // As per CTCP Internet draft
+          m_gamma = 30;
+          m_diffRenoValid = false;
+
 	      
 	    }
 
@@ -328,7 +335,10 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
               adder = std::max (1.0, adder);
 
               m_lwnd += static_cast<uint32_t> (adder);
-              m_dwnd = static_cast<uint32_t> (std::max(1.0,static_cast<double>(m_dwnd) - m_eta * diff));
+
+              uint32_t dwndInPackets = static_cast<uint32_t> (m_dwnd / tcb->m_segmentSize);
+              dwndInPackets = static_cast<uint32_t> (std::max(0.0, static_cast<double>(dwndInPackets) - m_eta * diff));
+              m_dwnd = dwndInPackets * tcb->m_segmentSize;
 
               tcb->m_cWnd = m_lwnd + m_dwnd;
             }
@@ -352,7 +362,7 @@ TcpCompound::IncreaseWindow (Ptr<TcpSocketState> tcb, uint32_t segmentsAcked)
        * target cwnd is throughput / minRtt
        */
 
-      double tmp = m_baseRtt.GetSeconds () / m_minRtt.GetSeconds ();
+      double tmp = m_baseRtt.GetSeconds () / m_srtt.GetSeconds ();
       uint32_t expectedRenoCwnd = actualRenoCwnd * tmp;
       NS_LOG_DEBUG ("Calculated expectedRenoCwnd = " << expectedRenoCwnd);
       NS_ASSERT (actualRenoCwnd >= expectedRenoCwnd); // implies baseRtt <= minRtt 

@@ -157,6 +157,7 @@ private:
   Time m_baseRtt;                    //!< Minimum of all Compound RTT measurements seen during connection
   Time m_minRtt;                     //!< Minimum of all RTT measurements within last RTT
   uint32_t m_cntRtt;                 //!< Number of RTT measurements during last RTT
+  uint32_t m_srtt;                    //!< Smoothened RTT
 
   double m_alpha;					//!< Parameter used in multiplicative increase
   double m_beta;					//!< Parameter used in multiplicative decrease
