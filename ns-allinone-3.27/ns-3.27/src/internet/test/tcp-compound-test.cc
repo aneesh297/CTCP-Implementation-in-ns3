@@ -39,6 +39,8 @@ public:
   /**
    * \brief Constructor.
    * \param cWnd Congestion window.
+   * \param lwnd Loss-based Congestion window.
+   * \param dwnd Delay-based Congestion window.
    * \param segmentSize Segment size.
    * \param ssThresh Slow Start Threshold.
    * \param rtt The RTT.
@@ -72,8 +74,8 @@ private:
   void GetSsThresh (Ptr<TcpCompound> cong);
 
   uint32_t m_cWnd;        //!< Congestion window.
-  uint32_t m_lwnd;
-  uint32_t m_dwnd;
+  uint32_t m_lwnd;        //!< Loss-based Congestion window.
+  uint32_t m_dwnd;        //!< Delay-based Congestion window.
   uint32_t m_segmentSize; //!< Segment size.
   uint32_t m_ssThresh;    //!< Slow Start Threshold.
   Time m_rtt;             //!< RTT.
