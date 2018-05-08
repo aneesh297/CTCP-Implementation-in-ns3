@@ -1,6 +1,6 @@
 /* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
 /*
- * Copyright (c) 2016 ResiliNets, ITTC, University of Kansas
+ * Copyright (c) 2017 NITK Surathkal
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -15,13 +15,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * Author: Truc Anh N. Nguyen <annguyen@ittc.ku.edu>
- *
- * James P.G. Sterbenz <jpgs@ittc.ku.edu>, director
- * ResiliNets Research Group  http://wiki.ittc.ku.edu/resilinets
- * Information and Telecommunication Technology Center (ITTC)
- * and Department of Electrical Engineering and Computer Science
- * The University of Kansas Lawrence, KS USA.
+ * Author: Siddharth V <siddharthvdn@gmail.com>
  */
 
 #include "ns3/test.h"
@@ -230,7 +224,7 @@ TcpCompoundTest::GetSsThresh (Ptr<TcpCompound> cong)
 class TcpCompoundTestSuite : public TestSuite
 {
 public:
-  TcpCompoundTestSuite () : TestSuite ("tcp-Compound-test", UNIT)
+  TcpCompoundTestSuite () : TestSuite ("tcp-compound-test", UNIT)
   {
     AddTestCase (new TcpCompoundTest (38 * 1446, 38 * 1446, 0, 1446, 40 * 1446, MilliSeconds (106), 1, SequenceNumber32 (2893), SequenceNumber32 (5785),
                                    "Compound test on cWnd and ssThresh when in slow start and diff > gamma"),
