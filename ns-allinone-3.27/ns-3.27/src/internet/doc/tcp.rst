@@ -1,4 +1,4 @@
-.. include:: replace.txt
+﻿.. include:: replace.txt
 .. highlight:: cpp
 
 TCP models in ns-3
@@ -39,7 +39,7 @@ ns-3 TCP
 In brief, the native |ns3| TCP model supports a full bidirectional TCP with
 connection setup and close logic.  Several congestion control algorithms
 are supported, with NewReno the default, and Westwood, Hybla, HighSpeed,
-Vegas, Scalable, Veno, Binary Increase Congestion Control (BIC), Yet Another
+Vegas, Compound, Scalable, Veno, Binary Increase Congestion Control (BIC), Yet Another
 HighSpeed TCP (YeAH), Illinois, H-TCP and Low Extra Delay Background Transport
 (LEDBAT) also supported. The model also supports Selective Acknowledgements
 (SACK). Multipath-TCP is not yet supported in the |ns3| releases.
@@ -447,6 +447,45 @@ modified through the Attribute system.
 
 More informations at: http://dx.doi.org/10.1109/49.464716
 
+Compound
+^^^^^^^^
+TCP Compound is a synergy of delay-based and loss-based congestion control 
+algorithms. It adds a scalable delay-based component into the standard TCP 
+Reno congestion avoidance algorithm (i.e., the loss-based component).This new 
+delay-based component can rapidly increase sending rate when network path is under
+utilized, but gracefully retreat in a busy network when bottleneck queue is built. 
+The sending window win is given by:
+
+.. math:: win = cwnd + dwnd
+
+Where cwnd is the loss-based component and dwnd is the delay-based component. cwnd
+is incremented as according to Reno congestion avoidance algorithm. For every ACK 
+recieved:
+
+.. math:: cwnd = cwnd + 1/(cwnd+dwnd)
+
+The delay-based component dwnd is calculated using the diff value provided by the
+Vegas congestion control algorithm. 
+
+.. math::
+
+   actual &= \frac{win}{RTT}        \\
+   expected &= \frac{win}{BaseRTT}  \\
+   diff &= expected - actual
+
+dwnd is now calculated for every ACK recieved as:
+
+.. math::
+
+   dwnd = dwnd + (alpha * (win^k - 1)), if diff < gamma
+   dwnd = dwnd - eta * diff           , if diff >= gamma
+   dwnd = win * (1 - beta) - cwnd/2   , if loss is detected
+
+We used the values provided by the RFC draft for alpha, beta, gamma, and eta. They can 
+however be modified using the Attribute system.
+
+More information at: https://www.microsoft.com/en-us/research/publication/a-compound-tcp-approach-for-high-speed-and-long-distance-networks/
+
 Scalable
 ^^^^^^^^
 Scalable improves TCP performance to better utilize the available bandwidth of
@@ -753,6 +792,7 @@ section below on :ref:`Writing-tcp-tests`.
 * **tcp-htcp-test:** Unit tests on the H-TCP congestion control
 * **tcp-hybla-test:** Unit tests on the Hybla congestion control
 * **tcp-vegas-test:** Unit tests on the Vegas congestion control
+* **tcp-compound-test:** Unit tests on the Compound congestion control
 * **tcp-veno-test:** Unit tests on the Veno congestion control
 * **tcp-scalable-test:** Unit tests on the Scalable congestion control
 * **tcp-bic-test:** Unit tests on the BIC congestion control
